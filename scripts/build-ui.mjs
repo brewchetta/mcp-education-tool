@@ -1,0 +1,35 @@
+// Bundles ui/quiz.ts (+ the MCP Apps client SDK) and inlines it into ui/quiz.html,
+// producing one self-contained file at build/ui/quiz.html. The host serves it as the
+// `ui://education/quiz.html` resource, so it must not depend on any external script.
+import { build } from "esbuild";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const TOKEN = "/*__BUNDLE__*/";
+
+const result = await build({
+  entryPoints: [path.join(root, "ui", "quiz.ts")],
+  bundle: true,
+  write: false,
+  format: "iife",
+  platform: "browser",
+  target: "es2022",
+  minify: true,
+  legalComments: "none",
+  logLevel: "warning",
+});
+
+// A literal "</script" inside the bundle would end the inline script block early.
+const js = result.outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
+
+const template = await readFile(path.join(root, "ui", "quiz.html"), "utf8");
+if (!template.includes(TOKEN)) throw new Error(`ui/quiz.html is missing the ${TOKEN} placeholder`);
+// Function replacer: the bundle contains "$" sequences that String.replace would otherwise interpret.
+const html = template.replace(TOKEN, () => js);
+
+const outDir = path.join(root, "build", "ui");
+await mkdir(outDir, { recursive: true });
+await writeFile(path.join(outDir, "quiz.html"), html);
+console.error(`build-ui: wrote build/ui/quiz.html (${(html.length / 1024).toFixed(0)} KB)`);

@@ -1,0 +1,27 @@
+{
+  "name": "mcp-education",
+  "version": "0.1.0",
+  "description": "Personal study MCP server: Wikipedia knowledge base on Supabase with quizzes and flashcards",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc && tsc -p ui/tsconfig.json && node scripts/build-ui.mjs",
+    "start": "node build/index.js",
+    "dev": "tsx src/index.ts",
+    "inspect": "npx @modelcontextprotocol/inspector node build/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@supabase/supabase-js": "^2.118.0",
+    "dotenv": "^18.0.9",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

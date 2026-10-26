@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "education": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:\\Users\\n\\Desktop\\Class Files Day\\mcp_education\\build\\index.js"],
+      "env": {}
+    }
+  }
+}
