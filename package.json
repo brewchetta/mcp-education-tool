@@ -1,25 +1,41 @@
 {
   "name": "mcp-education",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "private": true,
   "description": "Personal study MCP server: Wikipedia knowledge base on Supabase with quizzes and flashcards",
   "type": "module",
-  "main": "build/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "build": "tsc && tsc -p ui/tsconfig.json && node scripts/build-ui.mjs",
-    "start": "node build/index.js",
-    "dev": "tsx src/index.ts",
+    "build:ui": "tsc -p ui/tsconfig.json && node scripts/build-ui.mjs",
+    "build:stdio": "npm run build:ui && node scripts/build-stdio.mjs",
+    "build": "npm run build:ui && next build",
+    "dev": "npm run build:ui && next dev",
+    "start": "next start",
+    "stdio": "node build/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build:ui && tsx --test test/*.test.ts",
     "inspect": "npx @modelcontextprotocol/inspector node build/index.js"
   },
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "^1.7.5",
-    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
+    "@modelcontextprotocol/server": "^2.4.0",
     "@supabase/supabase-js": "^2.118.0",
     "dotenv": "^18.0.9",
+    "jose": "^6.2.13",
+    "mcp-handler": "^2.1.1",
+    "next": "^16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

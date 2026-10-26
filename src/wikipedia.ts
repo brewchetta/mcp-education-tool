@@ -1,4 +1,4 @@
-import { config } from "./config.js";
+import { getConfig } from "./config";
 
 const API_URL = "https://en.wikipedia.org/w/api.php";
 
@@ -38,8 +38,9 @@ async function wikiGet(params: Record<string, string>): Promise<any> {
   const search = new URLSearchParams({ format: "json", formatversion: "2", ...params });
   url.search = search.toString();
 
+  const { wikiUserAgent } = getConfig();
   const res = await fetch(url, {
-    headers: { "User-Agent": config.wikiUserAgent, "Api-User-Agent": config.wikiUserAgent },
+    headers: { "User-Agent": wikiUserAgent, "Api-User-Agent": wikiUserAgent },
     signal: AbortSignal.timeout(15_000),
   });
   if (!res.ok) {

@@ -1,10 +1,9 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { db, resolveTopic, unwrap, unwrapMaybe } from "../db.js";
-import { QUIZ_UI_URI } from "../ui.js";
-import { excerpt, fail, ok, safely } from "./util.js";
+import { db, resolveTopic, unwrap, unwrapMaybe } from "../db";
+import { QUIZ_UI_URI } from "../ui";
+import { excerpt, fail, ok, safely } from "./util";
 
 const questionSchema = z
   .object({
@@ -62,11 +61,11 @@ export function registerQuizTools(server: McpServer): void {
       description:
         "Step 1 of making a quiz: fetch the stored article for a topic plus instructions for writing a " +
         "multiple-choice quiz. After writing the questions, call save_quiz, which shows the quiz to the user.",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Topic in the knowledge base"),
         num_questions: z.number().int().min(1).max(25).default(10),
         difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
-      },
+      }),
     },
     safely(async ({ topic, num_questions, difficulty }) => {
       const t = await resolveTopic(topic);
@@ -101,12 +100,12 @@ export function registerQuizTools(server: McpServer): void {
       description:
         "Step 2 of making a quiz: validate and store a quiz you wrote, then display it to the user as an " +
         "interactive quiz (clickable answers, instant feedback, final score).",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Topic in the knowledge base"),
         title: z.string().min(1),
         difficulty: z.enum(["easy", "medium", "hard"]).optional(),
         questions: z.array(questionSchema).min(1).max(50),
-      },
+      }),
       _meta: { ui: { resourceUri: QUIZ_UI_URI } },
     },
     safely(async ({ topic, title, difficulty, questions }) => {
@@ -160,7 +159,7 @@ export function registerQuizTools(server: McpServer): void {
       description:
         "Open a previously saved quiz as an interactive quiz for the user to take (again). " +
         "Use list_quizzes to find ids.",
-      inputSchema: { quiz_id: z.string().uuid() },
+      inputSchema: z.object({ quiz_id: z.string().uuid() }),
       _meta: { ui: { resourceUri: QUIZ_UI_URI } },
     },
     safely(async ({ quiz_id }) => {
@@ -196,7 +195,7 @@ export function registerQuizTools(server: McpServer): void {
     "list_quizzes",
     {
       description: "List saved quizzes, optionally only those for one topic. Open one with get_quiz.",
-      inputSchema: { topic: z.string().optional().describe("Limit to this topic") },
+      inputSchema: z.object({ topic: z.string().optional().describe("Limit to this topic") }),
     },
     safely(async ({ topic }) => {
       let query = db()

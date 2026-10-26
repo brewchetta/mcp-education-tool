@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { config } from "./config.js";
+import { getConfig } from "./config";
 
 export interface Topic {
   id: string;
@@ -16,9 +16,12 @@ export type TopicSummary = Pick<Topic, "id" | "title" | "url" | "summary" | "fet
 let client: SupabaseClient | undefined;
 
 export function db(): SupabaseClient {
-  client ??= createClient(config.supabaseUrl, config.supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  if (!client) {
+    const { supabaseUrl, supabaseKey } = getConfig();
+    client = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
   return client;
 }
 

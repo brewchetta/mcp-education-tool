@@ -1,4 +1,4 @@
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult } from "@modelcontextprotocol/server";
 
 export function ok(data: unknown): CallToolResult {
   const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);

@@ -2,7 +2,12 @@
 
 A personal study tool, delivered as an [MCP](https://modelcontextprotocol.io) server. Give it a topic and it pulls the Wikipedia article into a Supabase (Postgres) knowledge base. Then ask your AI agent for quizzes and flashcards on anything in that knowledge base, and they're saved for reuse.
 
-> **Personal use only.** The server talks to Supabase with the **service-role key**, which bypasses Row Level Security. That's fine for a single-user server running on your own machine. Don't deploy it publicly or share the key. See [Security](#security).
+It runs two ways from the same code:
+
+- **Locally over stdio**, launched by your MCP client (Claude Code, the Inspector). No auth; it's your machine.
+- **Deployed on Vercel over HTTP**, so any MCP client (claude.ai, Claude desktop, Cursor, …) can connect. Protected by **OAuth** (Supabase Auth) and restricted to a single owner.
+
+> **Personal use only.** The server talks to Supabase with the **service-role key**, which bypasses Row Level Security. The deployed server is locked to one Supabase user (you); see [Security](#security) before exposing it.
 
 ## How it works
 
@@ -46,31 +51,86 @@ For quizzes, step 3 also **shows the quiz inline in the chat** as an interactive
 
 ### How it's built
 
-The view is a single self-contained HTML file (`ui/quiz.html` + `ui/quiz.ts`), bundled with esbuild together with the MCP Apps client SDK into `build/ui/quiz.html`. The server registers it as the resource `ui://education/quiz.html`, and `save_quiz` and `get_quiz` point at it with `_meta.ui.resourceUri`. The host fetches the resource, renders it in a sandboxed iframe, and passes the quiz in as the tool result. Run `npm run build` after editing anything under `ui/`; the server reads the file on each request, so no restart is needed for UI-only changes (restart for tool changes).
+The view is a single self-contained HTML file (`ui/quiz.html` + `ui/quiz.ts`), bundled with esbuild together with the MCP Apps client SDK. `npm run build:ui` writes it into the generated module `src/generated/quiz-html.ts` (git-ignored), which the server imports, so it ships inside serverless bundles instead of being read from disk. The server registers it as the resource `ui://education/quiz.html`, and `save_quiz` and `get_quiz` point at it with `_meta.ui.resourceUri`. The host fetches the resource, renders it in a sandboxed iframe, and passes the quiz in as the tool result. Re-run `npm run build:ui` after editing anything under `ui/` (`npm run build`, `dev` and `test` all do).
 
-## Setup
+## Run it locally (stdio)
 
 Requires Node 20+ and a free [Supabase](https://supabase.com) project.
 
 1. **Create the tables.** In the Supabase dashboard open *SQL Editor*, paste the contents of [`supabase/schema.sql`](supabase/schema.sql), and run it.
-2. **Configure credentials.** Copy `.env.example` to `.env` and fill in:
-   - `SUPABASE_URL`: *Project Settings → API → Project URL*
-   - `SUPABASE_SERVICE_ROLE_KEY`: *Project Settings → API → service_role*
-   - `WIKI_USER_AGENT`: your contact info (Wikimedia asks API clients to identify themselves)
+2. **Configure credentials.** Copy `.env.example` to `.env` and fill in `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `WIKI_USER_AGENT` (your contact info; Wikimedia asks API clients to identify themselves). The OAuth and `NEXT_PUBLIC_*` values are only needed for the deployed server.
 3. **Install and build.**
    ```bash
    npm install
-   npm run build
+   npm run build:stdio
    ```
-4. **Register with Claude Code.**
+4. **Register with Claude Code** (this repo already includes a project-level `.mcp.json` that does the same):
    ```bash
-   claude mcp add education -- node "C:\Users\n\Desktop\Class Files Day\mcp_education\build\index.js"
+   claude mcp add education -- node "C:\path\to\mcp_education\build\index.js"
    ```
    The server finds `.env` relative to its own location, so it works regardless of the directory it's launched from.
 
-Try it: *"Add photosynthesis to my knowledge base, then quiz me on it."*
+Try it: *"Add photosynthesis to my knowledge base, then quiz me on it."* Debug tools interactively with `npm run inspect`.
 
-To debug tools interactively: `npm run inspect` (opens the MCP Inspector).
+## Deploy to Vercel (HTTP + OAuth)
+
+```
+Client ──OAuth (PKCE, dynamic registration)──▶ Supabase Auth ──▶ /login → /oauth/consent  (this app)
+   │  Bearer token
+   ▼
+/api/mcp ── verify JWT (Supabase JWKS, issuer, audience, sub == OWNER_USER_ID) ──▶ tools ──▶ Supabase
+/.well-known/oauth-protected-resource   (tells clients Supabase is the authorization server)
+```
+
+The deployed server is a small Next.js app (`app/`) wrapping the same tools through [`mcp-handler`](https://github.com/vercel/mcp-handler) on the MCP SDK v2. Supabase Auth's OAuth 2.1 server issues the tokens; the app supplies the login and consent screens and refuses every token that isn't the owner's.
+
+### 1. Supabase (dashboard)
+
+1. **Create your user:** *Authentication → Users → Add user* (email + password). Copy their **UUID**; this is `OWNER_USER_ID`.
+2. **Disable sign-ups:** *Authentication → Sign In / Providers* → turn off "Allow new users to sign up".
+3. **JWT signing keys:** *Authentication → JWT Signing Keys* must use an asymmetric key (ES256/RS256). New projects normally do; if yours still uses the legacy HS256 secret, migrate.
+4. **OAuth server:** *Authentication → OAuth Server* → enable it, set the **Authorization Path** to `/oauth/consent`, and enable **dynamic client registration** (Claude Code uses random loopback ports, so pre-registering every client isn't practical; each client still needs *your* approval on the consent screen).
+5. **Site URL:** *Authentication → URL Configuration* → your production URL (e.g. `https://my-app.vercel.app`). Supabase sends the user to `<Site URL>/oauth/consent`.
+6. Note the **publishable (anon) key** for `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+
+> The OAuth server is a **beta** Supabase feature, and users who sign in through it count toward your monthly active users.
+
+### 2. Vercel
+
+Import the GitHub repo (framework preset: Next.js; the default `npm run build` works), then set these environment variables:
+
+| Variable | Value |
+|---|---|
+| `SUPABASE_URL` | `https://<ref>.supabase.co` |
+| `SUPABASE_SERVICE_ROLE_KEY` | service-role key, mark **Sensitive** |
+| `WIKI_USER_AGENT` | `mcp-education/0.2 (personal study tool; contact: you@example.com)` |
+| `OWNER_USER_ID` | the UUID from step 1.1 |
+| `APP_URL` | the production origin, no trailing slash |
+| `NEXT_PUBLIC_SUPABASE_URL` | same as `SUPABASE_URL` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | publishable key (public by design) |
+
+Choose a function region near your Supabase region. Make sure Vercel *Deployment Protection* doesn't block `/api/mcp` or `/.well-known/*` on the domain you use; OAuth clients need to reach them without a Vercel login. If `OWNER_USER_ID` or `APP_URL` is missing the server **refuses every request** and logs the cause.
+
+### 3. Connect a client
+
+- **Claude Code:**
+  ```bash
+  claude mcp add --transport http education https://<your-app>/api/mcp
+  ```
+  then run `/mcp` and authenticate: your browser opens the login and consent pages.
+- **claude.ai / Claude desktop:** *Settings → Connectors → Add custom connector* with the URL `https://<your-app>/api/mcp`.
+- **Cursor and others:** add the same URL as a remote (Streamable HTTP) server.
+
+Local development against the HTTP route: put the variables in `.env.local` (with `APP_URL=http://localhost:3000`) and run `npm run dev`.
+
+## Testing
+
+```bash
+npm test          # builds the quiz view, then runs the auth and HTTP tests
+npm run typecheck
+```
+
+`test/auth.test.ts` covers token verification (valid owner, wrong user/issuer/audience, expired, forged, tampered, wrong algorithm). `test/http.test.ts` drives the real handler stack with locally signed tokens: 401 challenges, tool and resource listing, the quiz view resource, and argument validation. Neither needs the network or a database.
 
 ## Design notes
 
@@ -94,20 +154,28 @@ Scraping is the right tool when no API exists or you need data the API doesn't e
 
 ## Security
 
-- `.env` is git-ignored. Never commit it or paste the service-role key into chat.
-- All tables have RLS enabled with **no policies**, so the public anon key can read and write nothing even if it leaks. Only the service-role key (held locally) can access the data.
-- If you later want to expose this beyond yourself, switch to per-user auth with RLS policies and drop the service-role key from the server.
+- **Owner-only.** A Supabase access token has the audience `authenticated` for *every* user of the project, so a valid signature alone proves nothing. The server also requires `sub == OWNER_USER_ID`, restricts algorithms to ES256/RS256, and checks issuer, audience and expiry. Anything else gets a plain 401.
+- **Fails closed.** Missing `OWNER_USER_ID`/`APP_URL` means nothing is accepted.
+- **Secrets.** `.env` and `.env*.local` are git-ignored. The service-role key lives only in server-side env vars and never reaches the browser; the login/consent pages use the publishable key. Never paste keys into chat.
+- **RLS.** All tables have RLS enabled with **no policies**, so the public anon key can read and write nothing even if it leaks.
+- **Consent.** Dynamic registration lets any MCP client *ask* for access, but nothing is granted until you approve it on the consent screen, and the resulting token only works for your user id. Review *Authentication → OAuth Apps* now and then and remove clients you don't recognise.
+- **Hardening for later.** Query Supabase with the caller's own token plus an owner-only RLS policy instead of the service-role key, which would keep that key off Vercel entirely. For several users you'd also need per-user rows (`user_id` columns) and a sign-up flow.
 
 ## Project layout
 
 ```
-src/index.ts            server entry (stdio transport)
-src/config.ts           env loading and validation
-src/db.ts               Supabase client, topic lookup
-src/wikipedia.ts        MediaWiki API client
-src/tools/              topics.ts, quiz.ts, flashcards.ts, util.ts
-src/ui.ts               registers the quiz view as the ui://education/quiz.html resource
-ui/quiz.html, quiz.ts   the interactive quiz view (markup/CSS and logic)
-scripts/build-ui.mjs    bundles the view into one self-contained file at build/ui/quiz.html
-supabase/schema.sql     database schema
+app/api/mcp/route.ts                           remote MCP endpoint (mcp-handler + owner-only auth)
+app/.well-known/oauth-protected-resource/      OAuth discovery metadata
+app/login, app/oauth/consent                   sign-in and consent pages (Supabase OAuth server)
+src/server.ts                                  registerAll / createServer, shared by both entries
+src/stdio.ts                                   local stdio entry (bundled to build/index.js)
+src/auth.ts                                    owner-only token verification
+src/config.ts                                  lazy env config
+src/db.ts, src/wikipedia.ts                    Supabase client, MediaWiki API client
+src/tools/                                     topics.ts, quiz.ts, flashcards.ts, util.ts
+src/ui.ts                                      registers the quiz view as ui://education/quiz.html
+ui/quiz.html, ui/quiz.ts                       the interactive quiz view
+scripts/build-ui.mjs, scripts/build-stdio.mjs  bundle the view / the stdio entry
+supabase/schema.sql                            database schema
+test/                                          auth and HTTP tests
 ```
