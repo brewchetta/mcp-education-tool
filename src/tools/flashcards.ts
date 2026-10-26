@@ -1,7 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { db, resolveTopic, unwrap, unwrapMaybe } from "../db.js";
-import { excerpt, fail, ok, safely } from "./util.js";
+import { db, resolveTopic, unwrap, unwrapMaybe } from "../db";
+import { excerpt, fail, ok, safely } from "./util";
 
 const cardSchema = z.object({
   front: z.string().min(1).describe("Prompt: a term, question, or cue"),
@@ -15,10 +15,10 @@ export function registerFlashcardTools(server: McpServer): void {
       description:
         "Step 1 of making flashcards: fetch the stored article for a topic plus instructions for writing a " +
         "deck. After writing the cards, call save_flashcards.",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Topic in the knowledge base"),
         num_cards: z.number().int().min(1).max(50).default(15),
-      },
+      }),
     },
     safely(async ({ topic, num_cards }) => {
       const t = await resolveTopic(topic);
@@ -47,11 +47,11 @@ export function registerFlashcardTools(server: McpServer): void {
     "save_flashcards",
     {
       description: "Step 2 of making flashcards: store a deck you wrote. Returns the deck id.",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Topic in the knowledge base"),
         title: z.string().min(1),
         cards: z.array(cardSchema).min(1).max(100),
-      },
+      }),
     },
     safely(async ({ topic, title, cards }) => {
       const t = await resolveTopic(topic);
@@ -74,7 +74,7 @@ export function registerFlashcardTools(server: McpServer): void {
     "get_deck",
     {
       description: "Load a saved flashcard deck with all its cards.",
-      inputSchema: { deck_id: z.string().uuid() },
+      inputSchema: z.object({ deck_id: z.string().uuid() }),
     },
     safely(async ({ deck_id }) => {
       const deck = unwrapMaybe(
@@ -95,7 +95,7 @@ export function registerFlashcardTools(server: McpServer): void {
     "list_decks",
     {
       description: "List saved flashcard decks, optionally only those for one topic.",
-      inputSchema: { topic: z.string().optional().describe("Limit to this topic") },
+      inputSchema: z.object({ topic: z.string().optional().describe("Limit to this topic") }),
     },
     safely(async ({ topic }) => {
       let query = db()

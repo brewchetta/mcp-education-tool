@@ -1,8 +1,8 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { db, listTopics, resolveTopic, unwrap, upsertTopic } from "../db.js";
-import { resolveArticle, searchWikipedia } from "../wikipedia.js";
-import { excerpt, fail, ok, safely } from "./util.js";
+import { db, listTopics, resolveTopic, unwrap, upsertTopic } from "../db";
+import { resolveArticle, searchWikipedia } from "../wikipedia";
+import { excerpt, fail, ok, safely } from "./util";
 
 export function registerTopicTools(server: McpServer): void {
   server.registerTool(
@@ -11,10 +11,10 @@ export function registerTopicTools(server: McpServer): void {
       description:
         "Search Wikipedia for articles matching a query. Returns candidate titles and snippets; " +
         "use it to pick the right article before calling add_topic. Does not modify the knowledge base.",
-      inputSchema: {
+      inputSchema: z.object({
         query: z.string().min(1).describe("What to search for"),
         limit: z.number().int().min(1).max(10).default(5).describe("Max results"),
-      },
+      }),
     },
     safely(async ({ query, limit }) => ok(await searchWikipedia(query, limit))),
   );
@@ -26,9 +26,9 @@ export function registerTopicTools(server: McpServer): void {
         "Find the Wikipedia article for a topic, fetch its full text, and store it in the knowledge base " +
         "(re-adding refreshes it). If the term is ambiguous, nothing is saved and the list of possible " +
         "meanings is returned: call add_topic again with the exact title of the right one.",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Topic name or exact Wikipedia article title, e.g. 'Photosynthesis'"),
-      },
+      }),
     },
     safely(async ({ topic }) => {
       const result = await resolveArticle(topic);
@@ -71,10 +71,10 @@ export function registerTopicTools(server: McpServer): void {
       description:
         "Read a stored topic. Title matching is case-insensitive and accepts partial titles. " +
         "Long articles are truncated to ~30k characters.",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Topic title (partial matches allowed)"),
         summary_only: z.boolean().default(false).describe("Return only the intro summary"),
-      },
+      }),
     },
     safely(async ({ topic, summary_only }) => {
       const t = await resolveTopic(topic);
@@ -89,9 +89,9 @@ export function registerTopicTools(server: McpServer): void {
     {
       description:
         "Permanently delete a topic from the knowledge base, along with all of its saved quizzes and flashcard decks.",
-      inputSchema: {
+      inputSchema: z.object({
         topic: z.string().min(1).describe("Exact topic title (partial matches are accepted if unambiguous)"),
-      },
+      }),
     },
     safely(async ({ topic }) => {
       const t = await resolveTopic(topic);
