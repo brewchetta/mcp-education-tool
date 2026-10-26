@@ -97,7 +97,7 @@ The deployed server is a small Next.js app (`app/`) wrapping the same tools thro
 
 ### 2. Vercel
 
-Import the GitHub repo (framework preset: Next.js; the default `npm run build` works), then set these environment variables:
+Import the GitHub repo, then set these environment variables. The framework is pinned to Next.js in `vercel.json`, and the default `npm run build` works; leave the Output Directory override off. (If a deploy fails with `STATIC_BUILD_NO_OUT_DIR … "public"`, the project was set to a static preset or has an Output Directory override: under *Settings → Build & Development*, set Framework Preset to **Next.js** and turn the Output Directory override off.)
 
 | Variable | Value |
 |---|---|
